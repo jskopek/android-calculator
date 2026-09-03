@@ -13,7 +13,7 @@ object Currencies {
     const val BASE = "USD"
 
     /** Sensible starting set for the picker; the user can change it. */
-    val defaultFavorites = listOf("USD", "CAD", "EUR", "GBP", "JPY", "AUD", "CHF", "CNY", "INR", "MXN")
+    val defaultFavorites = listOf("USD", "CAD", "EUR", "GBP", "JPY", "IDR", "AUD", "CHF", "CNY", "INR", "MXN")
 
     private fun flag(countryCode: String): String =
         countryCode.uppercase().map { Character.toChars(0x1F1E6 + (it - 'A')) }.joinToString("") { String(it) }
