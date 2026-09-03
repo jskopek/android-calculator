@@ -16,3 +16,7 @@ captures/
 
 # OS
 .DS_Store
+
+# Signing keys
+*.jks
+*.keystore

@@ -26,8 +26,24 @@ the command line:
 
 Requirements: JDK 17+, Android SDK with platform 35. Minimum device: Android 8.0 (API 26).
 
-Every push also builds the debug APK in GitHub Actions; download it from the workflow run's
-artifacts (`calculator-debug-apk`) to sideload on a phone.
+## Installing updates on a phone
+
+Every push builds a signed release APK and publishes it as a GitHub Release tagged
+`v0.1.<build number>`. The easiest way to keep a phone up to date is
+[Obtainium](https://github.com/ImranR98/Obtainium): add this repository's URL as an app and it
+will notify you when a new release appears and install it with one tap.
+
+Signing needs four repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret              | Value                                   |
+|---------------------|-----------------------------------------|
+| `KEYSTORE_BASE64`   | the release keystore, base64 encoded    |
+| `KEYSTORE_PASSWORD` | keystore password                       |
+| `KEY_ALIAS`         | key alias inside the keystore           |
+| `KEY_PASSWORD`      | key password                            |
+
+Keep the keystore safe: an APK signed with a different key cannot update an installed app.
+Local `assembleRelease` builds without these variables fall back to the debug key.
 
 ## Project layout
 
