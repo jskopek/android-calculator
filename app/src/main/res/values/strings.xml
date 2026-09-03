@@ -25,7 +25,7 @@
     <string name="use_result">Use result</string>
     <string name="back">Back</string>
     <string name="unit_converter">Unit converter</string>
-    <string name="converter_from">From</string>
+    <string name="converter_from">From the calculator</string>
     <string name="converter_to">To</string>
     <string name="swap_units">Swap units</string>
     <string name="converter_equals">%1$s equals</string>
@@ -40,7 +40,6 @@
     <string name="clear_tape">Clear the tape</string>
     <string name="copy">Copy</string>
     <string name="delete">Delete</string>
-    <string name="mode_calculator">Calculator</string>
+    <string name="mode_tape">Tape</string>
     <string name="mode_convert">Convert</string>
-    <string name="mode_currency">Currency</string>
 </resources>

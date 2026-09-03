@@ -1,11 +1,14 @@
 package ca.skopek.calculator.ui
 
+import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +39,7 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,24 +50,23 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ca.skopek.calculator.CalculatorUiState
 import ca.skopek.calculator.ConverterViewModel
 import ca.skopek.calculator.R
 import ca.skopek.calculator.data.HistoryEntry
 import ca.skopek.calculator.engine.Key
-import ca.skopek.calculator.engine.units.Currencies
 import ca.skopek.calculator.ui.theme.ThemeMode
 
 /**
- * Root of the app. Two modes: the calculator (a paper tape with the keypad beneath it) and the
- * converter, which springs up over it like a sheet. The mode rail along the bottom, or a swipe
- * up from the keypad, moves between them.
+ * Root of the app. The calculator (current line + keypad) never changes. Beside it on a wide
+ * screen, or above it on a phone, is a panel that is either the paper tape or the converter.
+ * Swipe the panel sideways, swipe the keypad up or down, or tap the rail to switch.
  */
 @Composable
 fun CalculatorApp(
@@ -71,6 +74,7 @@ fun CalculatorApp(
     windowSizeClass: WindowSizeClass,
     decimalSeparator: Char,
     onKey: (Key) -> Unit,
+    onInsertValue: (String) -> Unit,
     onHistorySelect: (HistoryEntry) -> Unit,
     onHistoryDelete: (HistoryEntry) -> Unit,
     onClearHistory: () -> Unit,
@@ -78,154 +82,149 @@ fun CalculatorApp(
     onConverterOpenChange: (Boolean) -> Unit,
 ) {
     val converterViewModel: ConverterViewModel = viewModel()
-    val converterState by converterViewModel.uiState.collectAsStateWithLifecycle()
-    val mode = when {
-        !uiState.converterOpen -> Mode.CALCULATOR
-        converterState.category.id == Currencies.CATEGORY_ID -> Mode.CURRENCY
-        else -> Mode.CONVERT
-    }
-    val selectMode: (Mode) -> Unit = { target ->
-        when (target) {
-            Mode.CALCULATOR -> onConverterOpenChange(false)
-            Mode.CONVERT, Mode.CURRENCY -> {
-                if (!uiState.converterOpen) uiState.display.currentValue?.let(converterViewModel::setInput)
-                if (target == Mode.CURRENCY) converterViewModel.showCurrency() else converterViewModel.showUnits()
-                onConverterOpenChange(true)
-            }
+    val panel = if (uiState.converterOpen) Panel.CONVERT else Panel.TAPE
+    val view = LocalView.current
+    val selectPanel: (Panel) -> Unit = { target ->
+        if (target != panel) {
+            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+            onConverterOpenChange(target == Panel.CONVERT)
         }
     }
+    // The converter follows whatever the calculator currently shows.
+    LaunchedEffect(uiState.display.currentValue) { converterViewModel.setValue(uiState.display.currentValue) }
+    BackHandler(enabled = panel == Panel.CONVERT) { selectPanel(Panel.TAPE) }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        AnimatedContent(
-            targetState = uiState.converterOpen,
-            transitionSpec = {
-                if (targetState) {
-                    (slideInVertically(Motion.sheet()) { it } + fadeIn())
-                        .togetherWith(slideOutVertically { -it / 8 } + fadeOut())
-                } else {
-                    (slideInVertically { -it / 8 } + fadeIn())
-                        .togetherWith(slideOutVertically(Motion.sheet()) { it } + fadeOut())
-                }
-            },
-            label = "mode",
-        ) { converterOpen ->
-            if (converterOpen) {
-                ConverterScreen(
-                    windowSizeClass = windowSizeClass,
-                    decimalSeparator = decimalSeparator,
-                    mode = mode,
-                    onSelectMode = selectMode,
-                    viewModel = converterViewModel,
-                )
-            } else {
-                CalculatorScreen(
-                    uiState = uiState,
-                    windowSizeClass = windowSizeClass,
-                    decimalSeparator = decimalSeparator,
-                    onKey = onKey,
-                    onHistorySelect = onHistorySelect,
-                    onHistoryDelete = onHistoryDelete,
-                    onClearHistory = onClearHistory,
-                    onThemeChange = onThemeChange,
-                    onSelectMode = selectMode,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CalculatorScreen(
-    uiState: CalculatorUiState,
-    windowSizeClass: WindowSizeClass,
-    decimalSeparator: Char,
-    onKey: (Key) -> Unit,
-    onHistorySelect: (HistoryEntry) -> Unit,
-    onHistoryDelete: (HistoryEntry) -> Unit,
-    onClearHistory: () -> Unit,
-    onThemeChange: (ThemeMode) -> Unit,
-    onSelectMode: (Mode) -> Unit,
-) {
     val twoPane = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
     val compactHeight = windowSizeClass.heightSizeClass == WindowHeightSizeClass.Compact
     val clipboard = LocalClipboardManager.current
     val onCopy: (HistoryEntry) -> Unit = { clipboard.setText(AnnotatedString(it.result)) }
 
-    if (twoPane) {
-        Row(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-            Column(modifier = Modifier.weight(0.45f).fillMaxHeight()) {
-                TapeHeader(
-                    themeMode = uiState.themeMode,
-                    onThemeChange = onThemeChange,
-                    onClearHistory = onClearHistory,
-                )
-                Tape(
+    val panelContent: @Composable (Modifier) -> Unit = { modifier ->
+        SwitchingPanel(
+            panel = panel,
+            onSelect = selectPanel,
+            modifier = modifier,
+        ) { shown ->
+            when (shown) {
+                Panel.TAPE -> Tape(
                     entries = uiState.history,
                     onUse = onHistorySelect,
                     onCopy = onCopy,
                     onDelete = onHistoryDelete,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Panel.CONVERT -> ConverterPanel(
+                    viewModel = converterViewModel,
+                    onUseValue = onInsertValue,
+                    tall = twoPane,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
-            VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Column(modifier = Modifier.weight(0.55f).fillMaxHeight()) {
+        }
+    }
+    val keypadModifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp)
+        .swipeVertically(
+            onUp = { selectPanel(Panel.CONVERT) },
+            onDown = { selectPanel(Panel.TAPE) },
+        )
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        if (twoPane) {
+            Row(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+                Column(modifier = Modifier.weight(0.45f).fillMaxHeight()) {
+                    PanelHeader(panel, uiState.themeMode, onThemeChange, onClearHistory)
+                    panelContent(Modifier.weight(1f).fillMaxWidth())
+                    ModeRail(active = panel, onSelect = selectPanel)
+                }
+                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Column(modifier = Modifier.weight(0.55f).fillMaxHeight()) {
+                    Display(
+                        state = uiState.display,
+                        onSwipeBackspace = { onKey(Key.Backspace) },
+                        onSwipeClear = { onKey(Key.Clear) },
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    )
+                    Keypad(
+                        decimalSeparator = decimalSeparator,
+                        onKey = onKey,
+                        compact = compactHeight,
+                        modifier = keypadModifier.weight(if (compactHeight) 2.2f else 1.6f).padding(bottom = 16.dp),
+                    )
+                }
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+                PanelHeader(panel, uiState.themeMode, onThemeChange, onClearHistory)
+                panelContent(Modifier.weight(1f).fillMaxWidth())
                 Display(
                     state = uiState.display,
                     onSwipeBackspace = { onKey(Key.Backspace) },
                     onSwipeClear = { onKey(Key.Clear) },
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Keypad(
                     decimalSeparator = decimalSeparator,
                     onKey = onKey,
                     compact = compactHeight,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(if (compactHeight) 2.2f else 1.6f)
-                        .padding(horizontal = 12.dp)
-                        .swipeUpToOpen { onSelectMode(Mode.CONVERT) },
+                    modifier = keypadModifier.weight(if (compactHeight) 2.2f else 1.35f),
                 )
-                ModeRail(active = Mode.CALCULATOR, onSelect = onSelectMode)
+                ModeRail(active = panel, onSelect = selectPanel)
             }
-        }
-    } else {
-        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-            TapeHeader(
-                themeMode = uiState.themeMode,
-                onThemeChange = onThemeChange,
-                onClearHistory = onClearHistory,
-            )
-            Tape(
-                entries = uiState.history,
-                onUse = onHistorySelect,
-                onCopy = onCopy,
-                onDelete = onHistoryDelete,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-            Display(
-                state = uiState.display,
-                onSwipeBackspace = { onKey(Key.Backspace) },
-                onSwipeClear = { onKey(Key.Clear) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Keypad(
-                decimalSeparator = decimalSeparator,
-                onKey = onKey,
-                compact = compactHeight,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (compactHeight) 2.2f else 1.35f)
-                    .padding(horizontal = 12.dp)
-                    .swipeUpToOpen { onSelectMode(Mode.CONVERT) },
-            )
-            ModeRail(active = Mode.CALCULATOR, onSelect = onSelectMode)
         }
     }
 }
 
-/** A swipe up across the keypad opens the converter sheet. Taps still go to the keys. */
+/** Slides between the tape and the converter, and takes a sideways swipe to switch. */
 @Composable
-private fun Modifier.swipeUpToOpen(onOpen: () -> Unit): Modifier {
+private fun SwitchingPanel(
+    panel: Panel,
+    onSelect: (Panel) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (Panel) -> Unit,
+) {
+    val threshold = with(LocalDensity.current) { 64.dp.toPx() }
+    Box(
+        modifier = modifier.pointerInput(Unit) {
+            var total = 0f
+            var fired = false
+            detectHorizontalDragGestures(
+                onDragStart = {
+                    total = 0f
+                    fired = false
+                },
+                onHorizontalDrag = { change, amount ->
+                    total += amount
+                    if (!fired && total < -threshold) {
+                        fired = true
+                        change.consume()
+                        onSelect(Panel.CONVERT)
+                    } else if (!fired && total > threshold) {
+                        fired = true
+                        change.consume()
+                        onSelect(Panel.TAPE)
+                    }
+                },
+            )
+        },
+    ) {
+        AnimatedContent(
+            targetState = panel,
+            transitionSpec = {
+                val forward = targetState == Panel.CONVERT
+                val enter = slideInHorizontally(Motion.sheet()) { if (forward) it else -it } + fadeIn()
+                val exit = slideOutHorizontally(Motion.sheet()) { if (forward) -it / 3 else it / 3 } + fadeOut()
+                enter.togetherWith(exit)
+            },
+            label = "panel",
+        ) { shown -> content(shown) }
+    }
+}
+
+/** Swipe up across the keypad opens the converter; swipe down brings the tape back. */
+@Composable
+private fun Modifier.swipeVertically(onUp: () -> Unit, onDown: () -> Unit): Modifier {
     val threshold = with(LocalDensity.current) { 72.dp.toPx() }
     return pointerInput(Unit) {
         var total = 0f
@@ -240,7 +239,11 @@ private fun Modifier.swipeUpToOpen(onOpen: () -> Unit): Modifier {
                 if (!fired && total < -threshold) {
                     fired = true
                     change.consume()
-                    onOpen()
+                    onUp()
+                } else if (!fired && total > threshold) {
+                    fired = true
+                    change.consume()
+                    onDown()
                 }
             },
         )
@@ -248,7 +251,8 @@ private fun Modifier.swipeUpToOpen(onOpen: () -> Unit): Modifier {
 }
 
 @Composable
-private fun TapeHeader(
+private fun PanelHeader(
+    panel: Panel,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
     onClearHistory: () -> Unit,
@@ -257,12 +261,18 @@ private fun TapeHeader(
         modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = stringResource(R.string.tape),
-            style = MaterialTheme.typography.titleLarge,
-            fontStyle = FontStyle.Italic,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        AnimatedContent(
+            targetState = panel,
+            transitionSpec = { fadeIn().togetherWith(fadeOut()) },
+            label = "title",
+        ) { shown ->
+            Text(
+                text = stringResource(shown.labelRes),
+                style = MaterialTheme.typography.titleLarge,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
         Spacer(modifier = Modifier.weight(1f))
         Box {
             var menuOpen by remember { mutableStateOf(false) }

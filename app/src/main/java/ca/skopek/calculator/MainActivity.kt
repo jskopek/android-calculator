@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
                     windowSizeClass = calculateWindowSizeClass(this),
                     decimalSeparator = viewModel.decimalSeparator,
                     onKey = viewModel::onKey,
+                    onInsertValue = viewModel::insertValue,
                     onHistorySelect = viewModel::useHistoryEntry,
                     onHistoryDelete = viewModel::deleteHistoryEntry,
                     onClearHistory = viewModel::clearHistory,

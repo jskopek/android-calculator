@@ -86,8 +86,11 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
         display.value = render()
     }
 
-    fun useHistoryEntry(entry: HistoryEntry) {
-        state = engine.insertNumber(state, entry.resultValue)
+    fun useHistoryEntry(entry: HistoryEntry) = insertValue(entry.resultValue)
+
+    /** Drops a number (a tape result, a converted value) into the expression. */
+    fun insertValue(text: String) {
+        state = engine.insertNumber(state, text)
         display.value = render()
     }
 

@@ -7,12 +7,10 @@ import ca.skopek.calculator.data.ConverterSelection
 import ca.skopek.calculator.data.CurrencyRates
 import ca.skopek.calculator.data.CurrencyRepository
 import ca.skopek.calculator.data.SettingsRepository
-import ca.skopek.calculator.engine.Key
 import ca.skopek.calculator.engine.NumberFormatter
-import ca.skopek.calculator.engine.NumberInput
+import ca.skopek.calculator.engine.units.ConversionUnit
 import ca.skopek.calculator.engine.units.Currencies
 import ca.skopek.calculator.engine.units.CurrencyInfo
-import ca.skopek.calculator.engine.units.ConversionUnit
 import ca.skopek.calculator.engine.units.UnitCatalog
 import ca.skopek.calculator.engine.units.UnitCategory
 import ca.skopek.calculator.engine.units.UnitConverter
@@ -26,8 +24,6 @@ import java.text.DateFormat
 import java.util.Currency
 import java.util.Date
 import java.util.Locale
-
-enum class ConverterField { FROM, TO }
 
 data class UnitValue(val unit: ConversionUnit, val text: String)
 
@@ -43,22 +39,25 @@ data class CurrencyStatus(
     val available: List<CurrencyInfo>,
 )
 
+/**
+ * The converter has no input of its own: the number comes from the calculator, so the keypad
+ * you already have under your thumb drives it.
+ */
 data class ConverterUiState(
     val categories: List<UnitCategory>,
     val category: UnitCategory,
     val fromUnit: ConversionUnit,
     val toUnit: ConversionUnit,
+    /** The calculator's current number, formatted. */
     val fromText: String,
+    /** The converted number, formatted. */
     val toText: String,
-    /** Which side the keypad edits; the other side shows the converted value. */
-    val activeField: ConverterField,
-    /** The value being edited expressed in every unit of the category. */
+    /** Raw text of the converted number, for inserting back into the calculator. */
+    val toValue: String?,
+    /** The number expressed in every unit of the category. */
     val allValues: List<UnitValue>,
     val currency: CurrencyStatus? = null,
-) {
-    val activeUnit: ConversionUnit get() = if (activeField == ConverterField.FROM) fromUnit else toUnit
-    val activeText: String get() = if (activeField == ConverterField.FROM) fromText else toText
-}
+)
 
 class ConverterViewModel(application: Application) : AndroidViewModel(application) {
     private val formatter = NumberFormatter()
@@ -68,14 +67,13 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
     private var favorites: List<String> = settings.currencyFavorites ?: Currencies.defaultFavorites
     private lateinit var currencyCategory: UnitCategory
     private lateinit var currencyStatus: CurrencyStatus
-    private val categories: List<UnitCategory> get() = UnitCatalog.categories + currencyCategory
+    // Currency first: it is the conversion people reach for most.
+    private val categories: List<UnitCategory> get() = listOf(currencyCategory) + UnitCatalog.categories
 
     private var category: UnitCategory
     private var fromUnit: ConversionUnit
     private var toUnit: ConversionUnit
-    private var activeField = ConverterField.FROM
-    private var input = "1"
-    private var lastUnitCategoryId: String = UnitCatalog.categories.first().id
+    private var value: BigDecimal = BigDecimal.ZERO
 
     private val _uiState: MutableStateFlow<ConverterUiState>
     val uiState: StateFlow<ConverterUiState>
@@ -86,8 +84,6 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
         category = saved?.let { s -> categories.firstOrNull { it.id == s.categoryId } } ?: categories.first()
         fromUnit = saved?.let { category.unit(it.fromUnitId) } ?: category.defaultFrom
         toUnit = saved?.let { category.unit(it.toUnitId) } ?: category.defaultTo
-        input = settings.converterInput ?: "1"
-        if (!isCurrency) lastUnitCategoryId = category.id
         _uiState = MutableStateFlow(build())
         uiState = _uiState.asStateFlow()
 
@@ -99,12 +95,11 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
                     publish()
                 }
         }
-        if (isCurrency) refreshRates()
     }
 
     private val isCurrency: Boolean get() = category.id == Currencies.CATEGORY_ID
 
-    /** Called whenever the converter screen becomes visible: fetch fresh rates once a day. */
+    /** Called whenever the converter panel is visible: fetch fresh rates once a day. */
     fun onShown() {
         if (isCurrency) refreshRates()
     }
@@ -113,33 +108,21 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { currencyRepository.refreshIfStale() }
     }
 
-    /** Switch to the unit converter, on the last non-currency category used. */
-    fun showUnits() {
-        if (!isCurrency) return
-        selectCategory(lastUnitCategoryId)
-    }
-
-    fun showCurrency() {
-        if (!isCurrency) selectCategory(Currencies.CATEGORY_ID)
+    /** The calculator's current number (raw text) — the converter follows it live. */
+    fun setValue(text: String?) {
+        val next = text?.toBigDecimalOrNull() ?: BigDecimal.ZERO
+        if (next.compareTo(value) == 0) return
+        value = next
+        _uiState.value = build()
     }
 
     fun selectCategory(id: String) {
         val next = categories.firstOrNull { it.id == id } ?: return
         if (next == category) return
-        if (next.id != Currencies.CATEGORY_ID) lastUnitCategoryId = next.id
         category = next
         fromUnit = next.defaultFrom
         toUnit = next.defaultTo
-        activeField = ConverterField.FROM
         if (isCurrency) refreshRates()
-        publish()
-    }
-
-    /** Sets the number to convert (used when opening the converter from the calculator). */
-    fun setInput(text: String) {
-        val value = text.toBigDecimalOrNull() ?: return
-        input = formatter.toInputText(value)
-        activeField = ConverterField.FROM
         publish()
     }
 
@@ -159,37 +142,17 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
         publish()
     }
 
-    /** From the "all units" list: show the tapped unit on the inactive side. */
+    /** From the "all units" list: convert to the tapped unit. */
     fun showUnit(unit: ConversionUnit) {
-        when (activeField) {
-            ConverterField.FROM -> toUnit = unit
-            ConverterField.TO -> fromUnit = unit
-        }
+        if (unit == fromUnit) return
+        toUnit = unit
         publish()
     }
 
-    fun activateField(field: ConverterField) {
-        if (field == activeField) return
-        // The value shown on that side becomes the editable input.
-        input = formatter.toInputText(convertedValue())
-        activeField = field
-        publish()
-    }
-
-    /** Flips the units. The number in the "from" field stays put and is now in the other unit. */
     fun swapUnits() {
-        if (activeField == ConverterField.TO) {
-            input = formatter.toInputText(convertedValue())
-            activeField = ConverterField.FROM
-        }
         val previousFrom = fromUnit
         fromUnit = toUnit
         toUnit = previousFrom
-        publish()
-    }
-
-    fun onKey(key: Key) {
-        input = NumberInput.apply(input, key)
         publish()
     }
 
@@ -251,41 +214,32 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
         Currencies.BASE
     }
 
-    private fun activeValue(): BigDecimal = input.toBigDecimalOrNull() ?: BigDecimal.ZERO
-
-    private fun convertedValue(): BigDecimal {
-        val (from, to) = if (activeField == ConverterField.FROM) fromUnit to toUnit else toUnit to fromUnit
-        return UnitConverter.convert(activeValue(), from, to)
-    }
-
-    private fun formatValue(value: BigDecimal): String =
-        if (isCurrency) formatter.formatCurrency(value) else formatter.formatResult(value)
+    private fun formatValue(v: BigDecimal): String =
+        if (isCurrency) formatter.formatCurrency(v) else formatter.formatResult(v)
 
     private fun publish() {
         settings.converterSelection = ConverterSelection(category.id, fromUnit.id, toUnit.id)
-        settings.converterInput = input
         _uiState.value = build()
     }
 
     private fun build(): ConverterUiState {
         val ratesMissing = isCurrency && !currencyStatus.ratesAvailable
-        val typed = formatter.formatInput(input.ifEmpty { "0" })
-        val converted = if (ratesMissing) "—" else formatValue(convertedValue())
-        val activeUnit = if (activeField == ConverterField.FROM) fromUnit else toUnit
-        val value = activeValue()
+        val converted = UnitConverter.convert(value, fromUnit, toUnit)
         return ConverterUiState(
             categories = categories,
             category = category,
             fromUnit = fromUnit,
             toUnit = toUnit,
-            fromText = if (activeField == ConverterField.FROM) typed else converted,
-            toText = if (activeField == ConverterField.TO) typed else converted,
-            activeField = activeField,
+            fromText = formatValue(value),
+            toText = if (ratesMissing) "—" else formatValue(converted),
+            toValue = if (ratesMissing) null else formatter.toInputText(converted),
             allValues = category.units.map { unit ->
-                val text = if (ratesMissing) "—" else formatValue(UnitConverter.convert(value, activeUnit, unit))
+                val text = if (ratesMissing) "—" else formatValue(UnitConverter.convert(value, fromUnit, unit))
                 UnitValue(unit, text)
             },
             currency = if (isCurrency) currencyStatus else null,
         )
     }
 }
+
+enum class ConverterField { FROM, TO }

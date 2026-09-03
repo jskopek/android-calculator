@@ -10,11 +10,10 @@ A simple, no-nonsense Android calculator built with Kotlin and Jetpack Compose.
 - **Ticker-tape history**: every calculation is kept with its full expression and result,
   newest at the bottom, and survives app restarts. Tap a line to reuse its result.
 - **Light / dark / system theme**, with Material You dynamic colours on Android 12+.
-- **Unit converter** (length, area, temperature, volume, mass, data, speed, time) with a
-  tap-to-edit from/to pair and, on wide screens, the value in every unit of the category.
-- **Currency conversion** with daily rates from ExchangeRate-API (Frankfurter/ECB as fallback),
-  cached on device and refreshed the first time you open it each day. Pick which currencies
-  appear in the picker.
+- **Converter panel** driven by the calculator: whatever the calculator shows is converted
+  live, and tapping the result sends it back. Currency first (daily rates from
+  ExchangeRate-API with Frankfurter/ECB as fallback, cached on device, user-picked currency
+  list), then length, area, temperature, volume, mass, data, speed, and time.
 - **Folding-phone friendly**: on the cover screen (or any narrow window) history lives in a
   bottom sheet; unfold and the tape sits beside the keypad. The keypad scales to whatever
   space it has, and state is kept across fold/unfold and rotation.

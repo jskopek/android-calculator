@@ -1,6 +1,7 @@
 package ca.skopek.calculator.ui
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -23,21 +24,21 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ca.skopek.calculator.R
-import androidx.compose.foundation.background
 
-enum class Mode { CALCULATOR, CONVERT, CURRENCY }
+/** What sits beside (or above) the calculator: the paper tape, or the converter. */
+enum class Panel { TAPE, CONVERT }
 
-/** The three words along the bottom edge. The oxblood underline slides to the active one. */
+/** Two words along the edge. The oxblood underline slides to the active one. */
 @Composable
-fun ModeRail(active: Mode, onSelect: (Mode) -> Unit, modifier: Modifier = Modifier) {
+fun ModeRail(active: Panel, onSelect: (Panel) -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     Row(
         modifier = modifier.fillMaxWidth().padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Mode.entries.forEach { mode ->
-            val selected = mode == active
+        Panel.entries.forEach { panel ->
+            val selected = panel == active
             val emphasis by animateFloatAsState(if (selected) 1f else 0f, Motion.settle(), label = "railEmphasis")
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -45,12 +46,12 @@ fun ModeRail(active: Mode, onSelect: (Mode) -> Unit, modifier: Modifier = Modifi
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { onSelect(mode) },
+                        onClick = { onSelect(panel) },
                     )
                     .padding(horizontal = 4.dp, vertical = 6.dp),
             ) {
                 Text(
-                    text = stringResource(mode.labelRes),
+                    text = stringResource(panel.labelRes),
                     style = MaterialTheme.typography.titleSmall,
                     color = if (selected) colors.onSurface else colors.onSurfaceVariant,
                 )
@@ -68,9 +69,8 @@ fun ModeRail(active: Mode, onSelect: (Mode) -> Unit, modifier: Modifier = Modifi
     }
 }
 
-private val Mode.labelRes: Int
+val Panel.labelRes: Int
     get() = when (this) {
-        Mode.CALCULATOR -> R.string.mode_calculator
-        Mode.CONVERT -> R.string.mode_convert
-        Mode.CURRENCY -> R.string.mode_currency
+        Panel.TAPE -> R.string.mode_tape
+        Panel.CONVERT -> R.string.mode_convert
     }
