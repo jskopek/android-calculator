@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -192,7 +191,6 @@ private fun ConverterPane(
             decimalSeparator = decimalSeparator,
             compact = compactHeight,
             onKey = viewModel::onKey,
-            onSwap = viewModel::swapUnits,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(if (compactHeight) 1.6f else 1.2f)
@@ -323,32 +321,31 @@ private fun UnitValueRow(value: UnitValue, highlighted: Boolean, onClick: () -> 
 }
 
 private class ConverterKeySpec(
+    val key: Key,
+    val style: KeyStyle,
     val label: String? = null,
     val icon: ImageVector? = null,
-    val style: KeyStyle,
     val descriptionRes: Int? = null,
-    val key: Key? = null,
-    val swap: Boolean = false,
+    /** Relative width; the "0" key spans several columns. */
+    val span: Float = 1f,
 )
 
+/** Digits plus clear, backspace, sign and decimal, styled like the calculator keypad. */
 @Composable
 private fun ConverterKeypad(
     decimalSeparator: Char,
     compact: Boolean,
     onKey: (Key) -> Unit,
-    onSwap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    fun digit(c: Char) = ConverterKeySpec(label = c.toString(), style = KeyStyle.NUMBER, key = Key.Digit(c))
-    val rows: List<List<ConverterKeySpec?>> = listOf(
-        listOf(digit('7'), digit('8'), digit('9'), ConverterKeySpec(icon = Icons.AutoMirrored.Outlined.Backspace, style = KeyStyle.ACTION, descriptionRes = R.string.key_backspace, key = Key.Backspace)),
-        listOf(digit('4'), digit('5'), digit('6'), ConverterKeySpec(label = "C", style = KeyStyle.ACTION, key = Key.Clear)),
-        listOf(digit('1'), digit('2'), digit('3'), ConverterKeySpec(icon = Icons.Outlined.SwapVert, style = KeyStyle.OPERATOR, descriptionRes = R.string.swap_units, swap = true)),
+    fun digit(c: Char) = ConverterKeySpec(Key.Digit(c), KeyStyle.NUMBER, label = c.toString())
+    val rows = listOf(
+        listOf(digit('7'), digit('8'), digit('9'), ConverterKeySpec(Key.Backspace, KeyStyle.ACTION, icon = Icons.AutoMirrored.Outlined.Backspace, descriptionRes = R.string.key_backspace)),
+        listOf(digit('4'), digit('5'), digit('6'), ConverterKeySpec(Key.Clear, KeyStyle.ACTION, label = "C")),
+        listOf(digit('1'), digit('2'), digit('3'), ConverterKeySpec(Key.ToggleSign, KeyStyle.ACTION, label = "±", descriptionRes = R.string.key_toggle_sign)),
         listOf(
-            ConverterKeySpec(label = "±", style = KeyStyle.NUMBER, descriptionRes = R.string.key_toggle_sign, key = Key.ToggleSign),
-            digit('0'),
-            ConverterKeySpec(label = decimalSeparator.toString(), style = KeyStyle.NUMBER, descriptionRes = R.string.key_decimal, key = Key.Decimal),
-            null,
+            digit('0').let { ConverterKeySpec(it.key, it.style, label = it.label, span = 3f) },
+            ConverterKeySpec(Key.Decimal, KeyStyle.NUMBER, label = decimalSeparator.toString(), descriptionRes = R.string.key_decimal),
         ),
     )
     val gap = if (compact) 6.dp else 10.dp
@@ -358,22 +355,18 @@ private fun ConverterKeypad(
         rows.forEach { row ->
             Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
                 row.forEach { spec ->
-                    if (spec == null) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    } else {
-                        KeyButton(
-                            label = spec.label,
-                            icon = spec.icon,
-                            style = spec.style,
-                            compact = compact,
-                            contentDescription = spec.descriptionRes?.let { stringResource(it) },
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            onClick = {
-                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                if (spec.swap) onSwap() else spec.key?.let(onKey)
-                            },
-                        )
-                    }
+                    KeyButton(
+                        label = spec.label,
+                        icon = spec.icon,
+                        style = spec.style,
+                        compact = compact,
+                        contentDescription = spec.descriptionRes?.let { stringResource(it) },
+                        modifier = Modifier.weight(spec.span).fillMaxHeight(),
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            onKey(spec.key)
+                        },
+                    )
                 }
             }
         }
