@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
                     decimalSeparator = viewModel.decimalSeparator,
                     onKey = viewModel::onKey,
                     onHistorySelect = viewModel::useHistoryEntry,
+                    onHistoryDelete = viewModel::deleteHistoryEntry,
                     onClearHistory = viewModel::clearHistory,
                     onThemeChange = viewModel::setThemeMode,
                     onConverterOpenChange = viewModel::setConverterOpen,

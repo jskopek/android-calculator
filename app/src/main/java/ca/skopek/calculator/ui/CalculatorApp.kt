@@ -1,9 +1,16 @@
 package ca.skopek.calculator.ui
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,50 +20,51 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ca.skopek.calculator.CalculatorUiState
 import ca.skopek.calculator.ConverterViewModel
-import ca.skopek.calculator.DisplayState
 import ca.skopek.calculator.R
 import ca.skopek.calculator.data.HistoryEntry
 import ca.skopek.calculator.engine.Key
+import ca.skopek.calculator.engine.units.Currencies
 import ca.skopek.calculator.ui.theme.ThemeMode
 
 /**
- * Root layout. Adapts to the window:
- *  - Compact width (phone, or the cover screen of a foldable): calculator only, history in a bottom sheet.
- *  - Medium/Expanded width (unfolded inner screen, landscape, tablets): history tape beside the calculator.
+ * Root of the app. Two modes: the calculator (a paper tape with the keypad beneath it) and the
+ * converter, which springs up over it like a sheet. The mode rail along the bottom, or a swipe
+ * up from the keypad, moves between them.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalculatorApp(
     uiState: CalculatorUiState,
@@ -64,156 +72,207 @@ fun CalculatorApp(
     decimalSeparator: Char,
     onKey: (Key) -> Unit,
     onHistorySelect: (HistoryEntry) -> Unit,
+    onHistoryDelete: (HistoryEntry) -> Unit,
     onClearHistory: () -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
     onConverterOpenChange: (Boolean) -> Unit,
 ) {
     val converterViewModel: ConverterViewModel = viewModel()
-    if (uiState.converterOpen) {
-        ConverterScreen(
-            windowSizeClass = windowSizeClass,
-            decimalSeparator = decimalSeparator,
-            onBack = { onConverterOpenChange(false) },
-            viewModel = converterViewModel,
-        )
-        return
+    val converterState by converterViewModel.uiState.collectAsStateWithLifecycle()
+    val mode = when {
+        !uiState.converterOpen -> Mode.CALCULATOR
+        converterState.category.id == Currencies.CATEGORY_ID -> Mode.CURRENCY
+        else -> Mode.CONVERT
     }
-    val openConverter = {
-        uiState.display.currentValue?.let(converterViewModel::setInput)
-        onConverterOpenChange(true)
+    val selectMode: (Mode) -> Unit = { target ->
+        when (target) {
+            Mode.CALCULATOR -> onConverterOpenChange(false)
+            Mode.CONVERT, Mode.CURRENCY -> {
+                if (!uiState.converterOpen) uiState.display.currentValue?.let(converterViewModel::setInput)
+                if (target == Mode.CURRENCY) converterViewModel.showCurrency() else converterViewModel.showUnits()
+                onConverterOpenChange(true)
+            }
+        }
     }
-
-    val twoPane = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
-    val compactHeight = windowSizeClass.heightSizeClass == WindowHeightSizeClass.Compact
-    var showHistorySheet by rememberSaveable { mutableStateOf(false) }
-
-    // Unfolding while the sheet is open: the side pane takes over, so drop the sheet.
-    LaunchedEffect(twoPane) { if (twoPane) showHistorySheet = false }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        if (twoPane) {
-            Row(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-                HistoryPane(
-                    entries = uiState.history,
-                    onSelect = onHistorySelect,
-                    onClear = onClearHistory,
-                    modifier = Modifier.weight(0.42f).fillMaxHeight().padding(top = 8.dp),
-                )
-                VerticalDivider()
-                CalculatorPane(
-                    display = uiState.display,
-                    themeMode = uiState.themeMode,
-                    decimalSeparator = decimalSeparator,
-                    compactHeight = compactHeight,
-                    showHistoryButton = false,
-                    onShowHistory = {},
-                    onOpenConverter = openConverter,
-                    onKey = onKey,
-                    onThemeChange = onThemeChange,
-                    modifier = Modifier.weight(0.58f).fillMaxHeight(),
-                )
-            }
-        } else {
-            CalculatorPane(
-                display = uiState.display,
-                themeMode = uiState.themeMode,
-                decimalSeparator = decimalSeparator,
-                compactHeight = compactHeight,
-                showHistoryButton = true,
-                onShowHistory = { showHistorySheet = true },
-                onOpenConverter = openConverter,
-                onKey = onKey,
-                onThemeChange = onThemeChange,
-                modifier = Modifier.fillMaxSize().safeDrawingPadding(),
-            )
-
-            if (showHistorySheet) {
-                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-                ModalBottomSheet(
-                    onDismissRequest = { showHistorySheet = false },
-                    sheetState = sheetState,
-                ) {
-                    HistoryPane(
-                        entries = uiState.history,
-                        onSelect = { entry ->
-                            onHistorySelect(entry)
-                            showHistorySheet = false
-                        },
-                        onClear = onClearHistory,
-                        modifier = Modifier.fillMaxWidth().fillMaxHeight(0.8f),
-                    )
+        AnimatedContent(
+            targetState = uiState.converterOpen,
+            transitionSpec = {
+                if (targetState) {
+                    (slideInVertically(Motion.sheet()) { it } + fadeIn())
+                        .togetherWith(slideOutVertically { -it / 8 } + fadeOut())
+                } else {
+                    (slideInVertically { -it / 8 } + fadeIn())
+                        .togetherWith(slideOutVertically(Motion.sheet()) { it } + fadeOut())
                 }
+            },
+            label = "mode",
+        ) { converterOpen ->
+            if (converterOpen) {
+                ConverterScreen(
+                    windowSizeClass = windowSizeClass,
+                    decimalSeparator = decimalSeparator,
+                    mode = mode,
+                    onSelectMode = selectMode,
+                    viewModel = converterViewModel,
+                )
+            } else {
+                CalculatorScreen(
+                    uiState = uiState,
+                    windowSizeClass = windowSizeClass,
+                    decimalSeparator = decimalSeparator,
+                    onKey = onKey,
+                    onHistorySelect = onHistorySelect,
+                    onHistoryDelete = onHistoryDelete,
+                    onClearHistory = onClearHistory,
+                    onThemeChange = onThemeChange,
+                    onSelectMode = selectMode,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun CalculatorPane(
-    display: DisplayState,
-    themeMode: ThemeMode,
+private fun CalculatorScreen(
+    uiState: CalculatorUiState,
+    windowSizeClass: WindowSizeClass,
     decimalSeparator: Char,
-    compactHeight: Boolean,
-    showHistoryButton: Boolean,
-    onShowHistory: () -> Unit,
-    onOpenConverter: () -> Unit,
     onKey: (Key) -> Unit,
+    onHistorySelect: (HistoryEntry) -> Unit,
+    onHistoryDelete: (HistoryEntry) -> Unit,
+    onClearHistory: () -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
-    modifier: Modifier = Modifier,
+    onSelectMode: (Mode) -> Unit,
 ) {
-    Column(modifier = modifier) {
-        TopActions(
-            themeMode = themeMode,
-            showHistoryButton = showHistoryButton,
-            onShowHistory = onShowHistory,
-            onOpenConverter = onOpenConverter,
-            onThemeChange = onThemeChange,
-        )
-        Display(
-            state = display,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
-        Keypad(
-            decimalSeparator = decimalSeparator,
-            onKey = onKey,
-            compact = compactHeight,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(if (compactHeight) 2.2f else 1.6f)
-                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+    val twoPane = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+    val compactHeight = windowSizeClass.heightSizeClass == WindowHeightSizeClass.Compact
+    val clipboard = LocalClipboardManager.current
+    val onCopy: (HistoryEntry) -> Unit = { clipboard.setText(AnnotatedString(it.result)) }
+
+    if (twoPane) {
+        Row(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+            Column(modifier = Modifier.weight(0.45f).fillMaxHeight()) {
+                TapeHeader(
+                    themeMode = uiState.themeMode,
+                    onThemeChange = onThemeChange,
+                    onClearHistory = onClearHistory,
+                )
+                Tape(
+                    entries = uiState.history,
+                    onUse = onHistorySelect,
+                    onCopy = onCopy,
+                    onDelete = onHistoryDelete,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+            }
+            VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Column(modifier = Modifier.weight(0.55f).fillMaxHeight()) {
+                Display(
+                    state = uiState.display,
+                    onSwipeBackspace = { onKey(Key.Backspace) },
+                    onSwipeClear = { onKey(Key.Clear) },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+                Keypad(
+                    decimalSeparator = decimalSeparator,
+                    onKey = onKey,
+                    compact = compactHeight,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(if (compactHeight) 2.2f else 1.6f)
+                        .padding(horizontal = 12.dp)
+                        .swipeUpToOpen { onSelectMode(Mode.CONVERT) },
+                )
+                ModeRail(active = Mode.CALCULATOR, onSelect = onSelectMode)
+            }
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+            TapeHeader(
+                themeMode = uiState.themeMode,
+                onThemeChange = onThemeChange,
+                onClearHistory = onClearHistory,
+            )
+            Tape(
+                entries = uiState.history,
+                onUse = onHistorySelect,
+                onCopy = onCopy,
+                onDelete = onHistoryDelete,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            Display(
+                state = uiState.display,
+                onSwipeBackspace = { onKey(Key.Backspace) },
+                onSwipeClear = { onKey(Key.Clear) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Keypad(
+                decimalSeparator = decimalSeparator,
+                onKey = onKey,
+                compact = compactHeight,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(if (compactHeight) 2.2f else 1.35f)
+                    .padding(horizontal = 12.dp)
+                    .swipeUpToOpen { onSelectMode(Mode.CONVERT) },
+            )
+            ModeRail(active = Mode.CALCULATOR, onSelect = onSelectMode)
+        }
+    }
+}
+
+/** A swipe up across the keypad opens the converter sheet. Taps still go to the keys. */
+@Composable
+private fun Modifier.swipeUpToOpen(onOpen: () -> Unit): Modifier {
+    val threshold = with(LocalDensity.current) { 72.dp.toPx() }
+    return pointerInput(Unit) {
+        var total = 0f
+        var fired = false
+        detectVerticalDragGestures(
+            onDragStart = {
+                total = 0f
+                fired = false
+            },
+            onVerticalDrag = { change, amount ->
+                total += amount
+                if (!fired && total < -threshold) {
+                    fired = true
+                    change.consume()
+                    onOpen()
+                }
+            },
         )
     }
 }
 
 @Composable
-private fun TopActions(
+private fun TapeHeader(
     themeMode: ThemeMode,
-    showHistoryButton: Boolean,
-    onShowHistory: () -> Unit,
-    onOpenConverter: () -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
+    onClearHistory: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.End,
+        modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onOpenConverter) {
-            Icon(Icons.Outlined.SwapHoriz, contentDescription = stringResource(R.string.unit_converter))
-        }
-        if (showHistoryButton) {
-            IconButton(onClick = onShowHistory) {
-                Icon(Icons.Outlined.History, contentDescription = stringResource(R.string.history))
-            }
-        }
+        Text(
+            text = stringResource(R.string.tape),
+            style = MaterialTheme.typography.titleLarge,
+            fontStyle = FontStyle.Italic,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(modifier = Modifier.weight(1f))
         Box {
             var menuOpen by remember { mutableStateOf(false) }
             IconButton(onClick = { menuOpen = true }) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.more_options))
+                Icon(Icons.Outlined.MoreHoriz, contentDescription = stringResource(R.string.more_options))
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 Text(
                     text = stringResource(R.string.theme),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
@@ -230,6 +289,15 @@ private fun TopActions(
                         },
                     )
                 }
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.clear_tape)) },
+                    leadingIcon = { Icon(Icons.Outlined.DeleteSweep, contentDescription = null) },
+                    onClick = {
+                        onClearHistory()
+                        menuOpen = false
+                    },
+                )
             }
         }
     }

@@ -1,6 +1,10 @@
 package ca.skopek.calculator.ui
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,14 +15,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Backspace
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -31,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import ca.skopek.calculator.R
 import ca.skopek.calculator.engine.Key
 import ca.skopek.calculator.engine.Operator
+import ca.skopek.calculator.ui.theme.Fonts
 
 internal enum class KeyStyle { NUMBER, OPERATOR, ACTION, EQUALS }
 
@@ -76,7 +83,7 @@ fun Keypad(
     compact: Boolean = false,
 ) {
     val layout = keypadLayout(decimalSeparator)
-    val gap: Dp = if (compact) 6.dp else 10.dp
+    val gap: Dp = if (compact) 6.dp else 8.dp
     val view = LocalView.current
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
@@ -86,9 +93,12 @@ fun Keypad(
                 horizontalArrangement = Arrangement.spacedBy(gap),
             ) {
                 row.forEach { spec ->
-                    CalculatorKey(
-                        spec = spec,
+                    KeyButton(
+                        label = spec.label,
+                        icon = spec.icon,
+                        style = spec.style,
                         compact = compact,
+                        contentDescription = spec.descriptionRes?.let { stringResource(it) },
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -101,26 +111,10 @@ fun Keypad(
     }
 }
 
-@Composable
-private fun CalculatorKey(
-    spec: KeySpec,
-    compact: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    KeyButton(
-        label = spec.label,
-        icon = spec.icon,
-        style = spec.style,
-        compact = compact,
-        contentDescription = spec.descriptionRes?.let { stringResource(it) },
-        modifier = modifier,
-        onClick = onClick,
-    )
-}
-
-/** One pill-shaped key. Shared by the calculator keypad and the converter keypad. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * One paper key. Scales down while pressed and springs back with a small overshoot on release.
+ * Shared by the calculator keypad and the converter keypad.
+ */
 @Composable
 internal fun KeyButton(
     label: String?,
@@ -132,11 +126,18 @@ internal fun KeyButton(
     onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    val (container, content) = when (style) {
-        KeyStyle.NUMBER -> colors.surfaceContainerHigh to colors.onSurface
-        KeyStyle.OPERATOR -> colors.secondaryContainer to colors.onSecondaryContainer
-        KeyStyle.ACTION -> colors.tertiaryContainer to colors.onTertiaryContainer
-        KeyStyle.EQUALS -> colors.primary to colors.onPrimary
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.9f else 1f,
+        animationSpec = Motion.keyPress(),
+        label = "keyScale",
+    )
+    val (container, content, border) = when (style) {
+        KeyStyle.NUMBER -> Triple(colors.surface, colors.onSurface, BorderStroke(1.dp, colors.outlineVariant))
+        KeyStyle.ACTION -> Triple(colors.tertiaryContainer, colors.onTertiaryContainer, BorderStroke(1.dp, colors.outlineVariant))
+        KeyStyle.OPERATOR -> Triple(colors.secondary, colors.onSecondary, null)
+        KeyStyle.EQUALS -> Triple(colors.primary, colors.onPrimary, null)
     }
     val semantics = if (contentDescription != null) {
         Modifier.semantics { this.contentDescription = contentDescription }
@@ -146,21 +147,29 @@ internal fun KeyButton(
 
     Surface(
         onClick = onClick,
-        modifier = modifier.then(semantics),
-        shape = RoundedCornerShape(percent = 50),
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .then(semantics),
+        shape = RoundedCornerShape(if (compact) 12.dp else 16.dp),
         color = container,
         contentColor = content,
+        border = border,
+        interactionSource = interaction,
     ) {
         Box(contentAlignment = Alignment.Center) {
             when {
                 icon != null -> Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(if (compact) 22.dp else 28.dp),
+                    modifier = Modifier.size(if (compact) 20.dp else 24.dp),
                 )
                 else -> Text(
                     text = label.orEmpty(),
-                    fontSize = if (compact) 22.sp else 30.sp,
+                    fontFamily = Fonts.mono,
+                    fontSize = if (compact) 20.sp else 26.sp,
                     fontWeight = if (style == KeyStyle.NUMBER) FontWeight.Normal else FontWeight.Medium,
                     maxLines = 1,
                 )

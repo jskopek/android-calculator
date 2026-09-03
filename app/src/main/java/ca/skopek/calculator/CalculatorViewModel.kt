@@ -91,6 +91,11 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
         display.value = render()
     }
 
+    fun deleteHistoryEntry(entry: HistoryEntry) {
+        history.update { list -> list.filterNot { it.id == entry.id } }
+        persistHistory()
+    }
+
     fun clearHistory() {
         history.value = emptyList()
         persistHistory()

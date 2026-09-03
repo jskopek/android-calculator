@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Calculator</string>
     <string name="history">History</string>
-    <string name="history_empty">Your calculations will show up here, like a paper tape.</string>
+    <string name="history_empty">The tape is blank. Your calculations will print here.</string>
     <string name="clear_history">Clear history</string>
     <string name="close">Close</string>
     <string name="more_options">More options</string>
@@ -36,4 +36,11 @@
     <string name="currency_update_failed">Couldn\'t update rates: %1$s</string>
     <string name="currency_no_rates">No exchange rates yet. Connect to the internet to fetch them.</string>
     <string name="done">Done</string>
+    <string name="tape">Tape</string>
+    <string name="clear_tape">Clear the tape</string>
+    <string name="copy">Copy</string>
+    <string name="delete">Delete</string>
+    <string name="mode_calculator">Calculator</string>
+    <string name="mode_convert">Convert</string>
+    <string name="mode_currency">Currency</string>
 </resources>

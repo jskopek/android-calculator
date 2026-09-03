@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Backspace
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Check
@@ -60,6 +59,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -82,11 +82,12 @@ import ca.skopek.calculator.engine.units.UnitCategory
 fun ConverterScreen(
     windowSizeClass: WindowSizeClass,
     decimalSeparator: Char,
-    onBack: () -> Unit,
+    mode: Mode,
+    onSelectMode: (Mode) -> Unit,
     viewModel: ConverterViewModel,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    BackHandler(onBack = onBack)
+    BackHandler { onSelectMode(Mode.CALCULATOR) }
     LaunchedEffect(Unit) { viewModel.onShown() }
 
     val twoPane = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
@@ -94,18 +95,13 @@ fun ConverterScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.back))
-                }
-                Text(
-                    text = stringResource(R.string.unit_converter),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-            }
+            Text(
+                text = stringResource(if (mode == Mode.CURRENCY) R.string.mode_currency else R.string.mode_convert),
+                style = MaterialTheme.typography.titleLarge,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 4.dp),
+            )
 
             CategoryChips(
                 categories = state.categories,
@@ -138,6 +134,7 @@ fun ConverterScreen(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
+            ModeRail(active = mode, onSelect = onSelectMode)
         }
     }
 }
@@ -156,7 +153,7 @@ private fun CategoryChips(
             FilterChip(
                 selected = category == selected,
                 onClick = { onSelect(category) },
-                label = { Text(category.name) },
+                label = { Text(category.name, style = MaterialTheme.typography.titleSmall) },
             )
         }
     }
@@ -285,7 +282,7 @@ private fun UnitPicker(
     Box {
         var open by remember { mutableStateOf(false) }
         TextButton(onClick = { open = true }) {
-            Text(unit.name)
+            Text(unit.name, style = MaterialTheme.typography.titleSmall)
             Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {

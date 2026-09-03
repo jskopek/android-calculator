@@ -75,6 +75,7 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
     private var toUnit: ConversionUnit
     private var activeField = ConverterField.FROM
     private var input = "1"
+    private var lastUnitCategoryId: String = UnitCatalog.categories.first().id
 
     private val _uiState: MutableStateFlow<ConverterUiState>
     val uiState: StateFlow<ConverterUiState>
@@ -86,6 +87,7 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
         fromUnit = saved?.let { category.unit(it.fromUnitId) } ?: category.defaultFrom
         toUnit = saved?.let { category.unit(it.toUnitId) } ?: category.defaultTo
         input = settings.converterInput ?: "1"
+        if (!isCurrency) lastUnitCategoryId = category.id
         _uiState = MutableStateFlow(build())
         uiState = _uiState.asStateFlow()
 
@@ -111,9 +113,20 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { currencyRepository.refreshIfStale() }
     }
 
+    /** Switch to the unit converter, on the last non-currency category used. */
+    fun showUnits() {
+        if (!isCurrency) return
+        selectCategory(lastUnitCategoryId)
+    }
+
+    fun showCurrency() {
+        if (!isCurrency) selectCategory(Currencies.CATEGORY_ID)
+    }
+
     fun selectCategory(id: String) {
         val next = categories.firstOrNull { it.id == id } ?: return
         if (next == category) return
+        if (next.id != Currencies.CATEGORY_ID) lastUnitCategoryId = next.id
         category = next
         fromUnit = next.defaultFrom
         toUnit = next.defaultTo
