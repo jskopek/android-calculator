@@ -42,14 +42,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import ca.skopek.calculator.CalculatorUiState
+import ca.skopek.calculator.ConverterViewModel
 import ca.skopek.calculator.DisplayState
 import ca.skopek.calculator.R
 import ca.skopek.calculator.data.HistoryEntry
 import ca.skopek.calculator.engine.Key
 import ca.skopek.calculator.ui.theme.ThemeMode
-
-private enum class Screen { CALCULATOR, CONVERTER }
 
 /**
  * Root layout. Adapts to the window:
@@ -66,15 +66,21 @@ fun CalculatorApp(
     onHistorySelect: (HistoryEntry) -> Unit,
     onClearHistory: () -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
+    onConverterOpenChange: (Boolean) -> Unit,
 ) {
-    var screen by rememberSaveable { mutableStateOf(Screen.CALCULATOR) }
-    if (screen == Screen.CONVERTER) {
+    val converterViewModel: ConverterViewModel = viewModel()
+    if (uiState.converterOpen) {
         ConverterScreen(
             windowSizeClass = windowSizeClass,
             decimalSeparator = decimalSeparator,
-            onBack = { screen = Screen.CALCULATOR },
+            onBack = { onConverterOpenChange(false) },
+            viewModel = converterViewModel,
         )
         return
+    }
+    val openConverter = {
+        uiState.display.currentValue?.let(converterViewModel::setInput)
+        onConverterOpenChange(true)
     }
 
     val twoPane = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
@@ -101,7 +107,7 @@ fun CalculatorApp(
                     compactHeight = compactHeight,
                     showHistoryButton = false,
                     onShowHistory = {},
-                    onOpenConverter = { screen = Screen.CONVERTER },
+                    onOpenConverter = openConverter,
                     onKey = onKey,
                     onThemeChange = onThemeChange,
                     modifier = Modifier.weight(0.58f).fillMaxHeight(),
@@ -115,7 +121,7 @@ fun CalculatorApp(
                 compactHeight = compactHeight,
                 showHistoryButton = true,
                 onShowHistory = { showHistorySheet = true },
-                onOpenConverter = { screen = Screen.CONVERTER },
+                onOpenConverter = openConverter,
                 onKey = onKey,
                 onThemeChange = onThemeChange,
                 modifier = Modifier.fillMaxSize().safeDrawingPadding(),

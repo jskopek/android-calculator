@@ -57,6 +57,7 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
         category = saved?.let { s -> categories.firstOrNull { it.id == s.categoryId } } ?: categories.first()
         fromUnit = saved?.let { category.unit(it.fromUnitId) } ?: category.defaultFrom
         toUnit = saved?.let { category.unit(it.toUnitId) } ?: category.defaultTo
+        input = settings.converterInput ?: "1"
         _uiState = MutableStateFlow(build())
         uiState = _uiState.asStateFlow()
     }
@@ -71,11 +72,26 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
         publish()
     }
 
+    /** Sets the number to convert (used when opening the converter from the calculator). */
+    fun setInput(text: String) {
+        val value = text.toBigDecimalOrNull() ?: return
+        input = formatter.toInputText(value)
+        activeField = ConverterField.FROM
+        publish()
+    }
+
     fun selectUnit(field: ConverterField, unitId: String) {
         val unit = category.unit(unitId) ?: return
+        // Choosing the unit already shown on the other side swaps the pair instead of duplicating it.
         when (field) {
-            ConverterField.FROM -> fromUnit = unit
-            ConverterField.TO -> toUnit = unit
+            ConverterField.FROM -> {
+                if (unit == toUnit) toUnit = fromUnit
+                fromUnit = unit
+            }
+            ConverterField.TO -> {
+                if (unit == fromUnit) fromUnit = toUnit
+                toUnit = unit
+            }
         }
         publish()
     }
@@ -97,7 +113,12 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
         publish()
     }
 
+    /** Flips the units. The number in the "from" field stays put and is now in the other unit. */
     fun swapUnits() {
+        if (activeField == ConverterField.TO) {
+            input = formatter.toInputText(convertedValue())
+            activeField = ConverterField.FROM
+        }
         val previousFrom = fromUnit
         fromUnit = toUnit
         toUnit = previousFrom
@@ -118,6 +139,7 @@ class ConverterViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun publish() {
         settings.converterSelection = ConverterSelection(category.id, fromUnit.id, toUnit.id)
+        settings.converterInput = input
         _uiState.value = build()
     }
 

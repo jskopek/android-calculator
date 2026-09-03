@@ -12,6 +12,7 @@ import ca.skopek.calculator.engine.CalculatorState
 import ca.skopek.calculator.engine.EvalError
 import ca.skopek.calculator.engine.Key
 import ca.skopek.calculator.engine.NumberFormatter
+import ca.skopek.calculator.engine.Token
 import ca.skopek.calculator.ui.theme.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,12 +33,15 @@ data class DisplayState(
     /** True after "=": the secondary line (the expression) sits above the result. */
     val secondaryAbove: Boolean,
     val error: EvalError?,
+    /** Raw text of the number the calculator currently "holds" (result, preview, or the number being typed). */
+    val currentValue: String? = null,
 )
 
 data class CalculatorUiState(
     val display: DisplayState,
     val history: List<HistoryEntry>,
     val themeMode: ThemeMode,
+    val converterOpen: Boolean = false,
 )
 
 class CalculatorViewModel(application: Application) : AndroidViewModel(application) {
@@ -54,13 +58,14 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
     private val display = MutableStateFlow(render())
     private val history = MutableStateFlow<List<HistoryEntry>>(emptyList())
     private val themeMode = MutableStateFlow(settings.themeMode)
+    private val converterOpen = MutableStateFlow(settings.converterOpen)
 
     val uiState: StateFlow<CalculatorUiState> =
-        combine(display, history, themeMode) { d, h, t -> CalculatorUiState(d, h, t) }
+        combine(display, history, themeMode, converterOpen) { d, h, t, c -> CalculatorUiState(d, h, t, c) }
             .stateIn(
                 viewModelScope,
                 SharingStarted.Eagerly,
-                CalculatorUiState(display.value, history.value, themeMode.value),
+                CalculatorUiState(display.value, history.value, themeMode.value, converterOpen.value),
             )
 
     init {
@@ -91,6 +96,11 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
         persistHistory()
     }
 
+    fun setConverterOpen(open: Boolean) {
+        settings.converterOpen = open
+        converterOpen.value = open
+    }
+
     fun setThemeMode(mode: ThemeMode) {
         settings.themeMode = mode
         themeMode.value = mode
@@ -118,10 +128,17 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
         val expression = formatter.formatExpression(state.tokens).ifEmpty { "0" }
         return when {
             state.error != null -> DisplayState(expression, null, secondaryAbove = false, error = state.error)
-            state.justEvaluated -> DisplayState(expression, lastExpression, secondaryAbove = true, error = null)
+            state.justEvaluated -> DisplayState(
+                expression, lastExpression, secondaryAbove = true, error = null,
+                currentValue = (state.tokens.firstOrNull() as? Token.Num)?.text,
+            )
             else -> {
-                val preview = engine.preview(state)?.let(formatter::formatResult)
-                DisplayState(expression, preview, secondaryAbove = false, error = null)
+                val preview = engine.preview(state)
+                val typed = (state.tokens.lastOrNull() as? Token.Num)?.text?.takeIf { it.any(Char::isDigit) }
+                DisplayState(
+                    expression, preview?.let(formatter::formatResult), secondaryAbove = false, error = null,
+                    currentValue = preview?.let(formatter::toInputText) ?: typed,
+                )
             }
         }
     }

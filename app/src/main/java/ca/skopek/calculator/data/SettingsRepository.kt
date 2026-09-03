@@ -32,8 +32,20 @@ class SettingsRepository(context: Context) {
                 .apply()
         }
 
+    /** Whether the converter was open when the app was last used. */
+    var converterOpen: Boolean
+        get() = prefs.getBoolean(KEY_CONVERTER_OPEN, false)
+        set(value) = prefs.edit().putBoolean(KEY_CONVERTER_OPEN, value).apply()
+
+    /** Raw text last typed into the converter. */
+    var converterInput: String?
+        get() = prefs.getString(KEY_CONVERTER_INPUT, null)
+        set(value) = prefs.edit().putString(KEY_CONVERTER_INPUT, value).apply()
+
     private companion object {
         const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_CONVERTER_OPEN = "converter_open"
+        const val KEY_CONVERTER_INPUT = "converter_input"
         const val KEY_CONVERTER_CATEGORY = "converter_category"
         const val KEY_CONVERTER_FROM = "converter_from"
         const val KEY_CONVERTER_TO = "converter_to"

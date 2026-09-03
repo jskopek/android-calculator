@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
                     onHistorySelect = viewModel::useHistoryEntry,
                     onClearHistory = viewModel::clearHistory,
                     onThemeChange = viewModel::setThemeMode,
+                    onConverterOpenChange = viewModel::setConverterOpen,
                 )
             }
         }

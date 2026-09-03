@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -54,7 +55,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import ca.skopek.calculator.ConverterField
 import ca.skopek.calculator.ConverterUiState
 import ca.skopek.calculator.ConverterViewModel
@@ -73,7 +73,7 @@ fun ConverterScreen(
     windowSizeClass: WindowSizeClass,
     decimalSeparator: Char,
     onBack: () -> Unit,
-    viewModel: ConverterViewModel = viewModel(),
+    viewModel: ConverterViewModel,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     BackHandler(onBack = onBack)
@@ -162,7 +162,7 @@ private fun ConverterPane(
     Column(modifier = modifier) {
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
         ) {
             UnitField(
                 label = stringResource(R.string.converter_from),
@@ -173,6 +173,11 @@ private fun ConverterPane(
                 onActivate = { viewModel.activateField(ConverterField.FROM) },
                 onUnitSelected = { viewModel.selectUnit(ConverterField.FROM, it.id) },
             )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                FilledTonalIconButton(onClick = viewModel::swapUnits) {
+                    Icon(Icons.Outlined.SwapVert, contentDescription = stringResource(R.string.swap_units))
+                }
+            }
             UnitField(
                 label = stringResource(R.string.converter_to),
                 unit = state.toUnit,
