@@ -53,9 +53,9 @@ fun Display(state: DisplayState, modifier: Modifier = Modifier) {
 
 /** Single-line text that stays right-aligned and keeps its end (the most recent input) visible. */
 @Composable
-private fun ScrollingText(text: String, style: TextStyle, color: Color) {
+internal fun ScrollingText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
     val scrollState = rememberScrollState()
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Text(
             text = text,
             style = style,

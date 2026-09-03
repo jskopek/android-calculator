@@ -23,4 +23,10 @@
     <string name="error_divide_by_zero">Can\'t divide by zero</string>
     <string name="error_incomplete">Incomplete expression</string>
     <string name="use_result">Use result</string>
+    <string name="back">Back</string>
+    <string name="unit_converter">Unit converter</string>
+    <string name="converter_from">From</string>
+    <string name="converter_to">To</string>
+    <string name="swap_units">Swap units</string>
+    <string name="converter_equals">%1$s equals</string>
 </resources>

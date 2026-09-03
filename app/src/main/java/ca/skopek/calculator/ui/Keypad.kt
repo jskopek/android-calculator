@@ -32,7 +32,7 @@ import ca.skopek.calculator.R
 import ca.skopek.calculator.engine.Key
 import ca.skopek.calculator.engine.Operator
 
-private enum class KeyStyle { NUMBER, OPERATOR, ACTION, EQUALS }
+internal enum class KeyStyle { NUMBER, OPERATOR, ACTION, EQUALS }
 
 private class KeySpec(
     val key: Key,
@@ -101,7 +101,6 @@ fun Keypad(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CalculatorKey(
     spec: KeySpec,
@@ -109,16 +108,38 @@ private fun CalculatorKey(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    KeyButton(
+        label = spec.label,
+        icon = spec.icon,
+        style = spec.style,
+        compact = compact,
+        contentDescription = spec.descriptionRes?.let { stringResource(it) },
+        modifier = modifier,
+        onClick = onClick,
+    )
+}
+
+/** One pill-shaped key. Shared by the calculator keypad and the converter keypad. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun KeyButton(
+    label: String?,
+    icon: ImageVector?,
+    style: KeyStyle,
+    compact: Boolean,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
-    val (container, content) = when (spec.style) {
+    val (container, content) = when (style) {
         KeyStyle.NUMBER -> colors.surfaceContainerHigh to colors.onSurface
         KeyStyle.OPERATOR -> colors.secondaryContainer to colors.onSecondaryContainer
         KeyStyle.ACTION -> colors.tertiaryContainer to colors.onTertiaryContainer
         KeyStyle.EQUALS -> colors.primary to colors.onPrimary
     }
-    val description = spec.descriptionRes?.let { stringResource(it) }
-    val semantics = if (description != null) {
-        Modifier.semantics { contentDescription = description }
+    val semantics = if (contentDescription != null) {
+        Modifier.semantics { this.contentDescription = contentDescription }
     } else {
         Modifier
     }
@@ -132,15 +153,15 @@ private fun CalculatorKey(
     ) {
         Box(contentAlignment = Alignment.Center) {
             when {
-                spec.icon != null -> Icon(
-                    imageVector = spec.icon,
+                icon != null -> Icon(
+                    imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(if (compact) 22.dp else 28.dp),
                 )
                 else -> Text(
-                    text = spec.label.orEmpty(),
+                    text = label.orEmpty(),
                     fontSize = if (compact) 22.sp else 30.sp,
-                    fontWeight = if (spec.style == KeyStyle.NUMBER) FontWeight.Normal else FontWeight.Medium,
+                    fontWeight = if (style == KeyStyle.NUMBER) FontWeight.Normal else FontWeight.Medium,
                     maxLines = 1,
                 )
             }

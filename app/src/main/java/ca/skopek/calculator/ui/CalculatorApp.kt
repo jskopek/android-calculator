@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +49,8 @@ import ca.skopek.calculator.data.HistoryEntry
 import ca.skopek.calculator.engine.Key
 import ca.skopek.calculator.ui.theme.ThemeMode
 
+private enum class Screen { CALCULATOR, CONVERTER }
+
 /**
  * Root layout. Adapts to the window:
  *  - Compact width (phone, or the cover screen of a foldable): calculator only, history in a bottom sheet.
@@ -64,6 +67,16 @@ fun CalculatorApp(
     onClearHistory: () -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
 ) {
+    var screen by rememberSaveable { mutableStateOf(Screen.CALCULATOR) }
+    if (screen == Screen.CONVERTER) {
+        ConverterScreen(
+            windowSizeClass = windowSizeClass,
+            decimalSeparator = decimalSeparator,
+            onBack = { screen = Screen.CALCULATOR },
+        )
+        return
+    }
+
     val twoPane = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
     val compactHeight = windowSizeClass.heightSizeClass == WindowHeightSizeClass.Compact
     var showHistorySheet by rememberSaveable { mutableStateOf(false) }
@@ -88,6 +101,7 @@ fun CalculatorApp(
                     compactHeight = compactHeight,
                     showHistoryButton = false,
                     onShowHistory = {},
+                    onOpenConverter = { screen = Screen.CONVERTER },
                     onKey = onKey,
                     onThemeChange = onThemeChange,
                     modifier = Modifier.weight(0.58f).fillMaxHeight(),
@@ -101,6 +115,7 @@ fun CalculatorApp(
                 compactHeight = compactHeight,
                 showHistoryButton = true,
                 onShowHistory = { showHistorySheet = true },
+                onOpenConverter = { screen = Screen.CONVERTER },
                 onKey = onKey,
                 onThemeChange = onThemeChange,
                 modifier = Modifier.fillMaxSize().safeDrawingPadding(),
@@ -135,6 +150,7 @@ private fun CalculatorPane(
     compactHeight: Boolean,
     showHistoryButton: Boolean,
     onShowHistory: () -> Unit,
+    onOpenConverter: () -> Unit,
     onKey: (Key) -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier,
@@ -144,6 +160,7 @@ private fun CalculatorPane(
             themeMode = themeMode,
             showHistoryButton = showHistoryButton,
             onShowHistory = onShowHistory,
+            onOpenConverter = onOpenConverter,
             onThemeChange = onThemeChange,
         )
         Display(
@@ -167,12 +184,16 @@ private fun TopActions(
     themeMode: ThemeMode,
     showHistoryButton: Boolean,
     onShowHistory: () -> Unit,
+    onOpenConverter: () -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.End,
     ) {
+        IconButton(onClick = onOpenConverter) {
+            Icon(Icons.Outlined.SwapHoriz, contentDescription = stringResource(R.string.unit_converter))
+        }
         if (showHistoryButton) {
             IconButton(onClick = onShowHistory) {
                 Icon(Icons.Outlined.History, contentDescription = stringResource(R.string.history))

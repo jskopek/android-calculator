@@ -10,6 +10,8 @@ A simple, no-nonsense Android calculator built with Kotlin and Jetpack Compose.
 - **Ticker-tape history**: every calculation is kept with its full expression and result,
   newest at the bottom, and survives app restarts. Tap a line to reuse its result.
 - **Light / dark / system theme**, with Material You dynamic colours on Android 12+.
+- **Unit converter** (length, area, temperature, volume, mass, data, speed, time) with a
+  tap-to-edit from/to pair and, on wide screens, the value in every unit of the category.
 - **Folding-phone friendly**: on the cover screen (or any narrow window) history lives in a
   bottom sheet; unfold and the tape sits beside the keypad. The keypad scales to whatever
   space it has, and state is kept across fold/unfold and rotation.
@@ -53,14 +55,17 @@ app/src/main/java/ca/skopek/calculator/
 │   ├── Token.kt             Tokens, keys, and the immutable CalculatorState
 │   ├── CalculatorEngine.kt  Key handling: what each key does to the state
 │   ├── Evaluator.kt         Precedence-aware BigDecimal evaluation
-│   └── NumberFormatter.kt   Locale-aware display formatting
+│   ├── NumberFormatter.kt   Locale-aware display formatting
+│   └── units/               Unit categories, factors, and the converter
 ├── data/          History persistence (JSON file) and settings (SharedPreferences)
-├── ui/            Compose screens: adaptive layout, display, keypad, history tape
-└── CalculatorViewModel.kt   Glues engine, history and settings together
+├── ui/            Compose screens: adaptive layout, display, keypad, history tape, converter
+├── CalculatorViewModel.kt   Glues engine, history and settings together
+└── ConverterViewModel.kt    State for the unit converter
 ```
 
 ## Ideas for later
 
+- Currency conversion with live rates (a category built at runtime from fetched rates)
 - Scientific mode
 - Tabletop / half-folded posture layout using Jetpack WindowManager
 - Hardware keyboard input

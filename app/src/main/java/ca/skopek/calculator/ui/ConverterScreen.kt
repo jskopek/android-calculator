@@ -1,0 +1,376 @@
+package ca.skopek.calculator.ui
+
+import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Backspace
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import ca.skopek.calculator.ConverterField
+import ca.skopek.calculator.ConverterUiState
+import ca.skopek.calculator.ConverterViewModel
+import ca.skopek.calculator.R
+import ca.skopek.calculator.UnitValue
+import ca.skopek.calculator.engine.Key
+import ca.skopek.calculator.engine.units.ConversionUnit
+import ca.skopek.calculator.engine.units.UnitCategory
+
+/**
+ * Unit converter. Two fields (from / to); tapping a field makes it the one the keypad edits and
+ * the other side follows. Wide windows also show the value in every unit of the category.
+ */
+@Composable
+fun ConverterScreen(
+    windowSizeClass: WindowSizeClass,
+    decimalSeparator: Char,
+    onBack: () -> Unit,
+    viewModel: ConverterViewModel = viewModel(),
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    BackHandler(onBack = onBack)
+
+    val twoPane = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+    val compactHeight = windowSizeClass.heightSizeClass == WindowHeightSizeClass.Compact
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.back))
+                }
+                Text(
+                    text = stringResource(R.string.unit_converter),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+            }
+
+            CategoryChips(
+                categories = state.categories,
+                selected = state.category,
+                onSelect = { viewModel.selectCategory(it.id) },
+            )
+
+            if (twoPane) {
+                Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    ConverterPane(
+                        state = state,
+                        decimalSeparator = decimalSeparator,
+                        compactHeight = compactHeight,
+                        viewModel = viewModel,
+                        modifier = Modifier.weight(0.55f).fillMaxHeight(),
+                    )
+                    VerticalDivider()
+                    AllUnitsList(
+                        state = state,
+                        onSelect = viewModel::showUnit,
+                        modifier = Modifier.weight(0.45f).fillMaxHeight(),
+                    )
+                }
+            } else {
+                ConverterPane(
+                    state = state,
+                    decimalSeparator = decimalSeparator,
+                    compactHeight = compactHeight,
+                    viewModel = viewModel,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryChips(
+    categories: List<UnitCategory>,
+    selected: UnitCategory,
+    onSelect: (UnitCategory) -> Unit,
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(categories, key = { it.id }) { category ->
+            FilterChip(
+                selected = category == selected,
+                onClick = { onSelect(category) },
+                label = { Text(category.name) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConverterPane(
+    state: ConverterUiState,
+    decimalSeparator: Char,
+    compactHeight: Boolean,
+    viewModel: ConverterViewModel,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Column(
+            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+        ) {
+            UnitField(
+                label = stringResource(R.string.converter_from),
+                unit = state.fromUnit,
+                units = state.category.units,
+                valueText = state.fromText,
+                active = state.activeField == ConverterField.FROM,
+                onActivate = { viewModel.activateField(ConverterField.FROM) },
+                onUnitSelected = { viewModel.selectUnit(ConverterField.FROM, it.id) },
+            )
+            UnitField(
+                label = stringResource(R.string.converter_to),
+                unit = state.toUnit,
+                units = state.category.units,
+                valueText = state.toText,
+                active = state.activeField == ConverterField.TO,
+                onActivate = { viewModel.activateField(ConverterField.TO) },
+                onUnitSelected = { viewModel.selectUnit(ConverterField.TO, it.id) },
+            )
+        }
+        ConverterKeypad(
+            decimalSeparator = decimalSeparator,
+            compact = compactHeight,
+            onKey = viewModel::onKey,
+            onSwap = viewModel::swapUnits,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(if (compactHeight) 1.6f else 1.2f)
+                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+        )
+    }
+}
+
+@Composable
+private fun UnitField(
+    label: String,
+    unit: ConversionUnit,
+    units: List<ConversionUnit>,
+    valueText: String,
+    active: Boolean,
+    onActivate: () -> Unit,
+    onUnitSelected: (ConversionUnit) -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (active) colors.surfaceContainerHigh else colors.surfaceContainerLow)
+            .clickable(onClick = onActivate)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            UnitPicker(unit = unit, units = units, onSelect = onUnitSelected)
+        }
+        Row(verticalAlignment = Alignment.Bottom) {
+            ScrollingText(
+                text = valueText,
+                style = MaterialTheme.typography.displaySmall,
+                color = if (active) colors.primary else colors.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = unit.symbol,
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp, bottom = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun UnitPicker(
+    unit: ConversionUnit,
+    units: List<ConversionUnit>,
+    onSelect: (ConversionUnit) -> Unit,
+) {
+    Box {
+        var open by remember { mutableStateOf(false) }
+        TextButton(onClick = { open = true }) {
+            Text(unit.name)
+            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            units.forEach { candidate ->
+                DropdownMenuItem(
+                    text = { Text("${candidate.name} (${candidate.symbol})") },
+                    trailingIcon = {
+                        if (candidate == unit) Icon(Icons.Outlined.Check, contentDescription = null)
+                    },
+                    onClick = {
+                        onSelect(candidate)
+                        open = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AllUnitsList(
+    state: ConverterUiState,
+    onSelect: (ConversionUnit) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = stringResource(R.string.converter_equals, "${state.activeText} ${state.activeUnit.symbol}"),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+        )
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            items(state.allValues, key = { it.unit.id }) { value ->
+                UnitValueRow(value = value, highlighted = value.unit == state.activeUnit, onClick = { onSelect(value.unit) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun UnitValueRow(value: UnitValue, highlighted: Boolean, onClick: () -> Unit) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = value.unit.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "${value.text} ${value.unit.symbol}",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.End,
+                color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+private class ConverterKeySpec(
+    val label: String? = null,
+    val icon: ImageVector? = null,
+    val style: KeyStyle,
+    val descriptionRes: Int? = null,
+    val key: Key? = null,
+    val swap: Boolean = false,
+)
+
+@Composable
+private fun ConverterKeypad(
+    decimalSeparator: Char,
+    compact: Boolean,
+    onKey: (Key) -> Unit,
+    onSwap: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    fun digit(c: Char) = ConverterKeySpec(label = c.toString(), style = KeyStyle.NUMBER, key = Key.Digit(c))
+    val rows: List<List<ConverterKeySpec?>> = listOf(
+        listOf(digit('7'), digit('8'), digit('9'), ConverterKeySpec(icon = Icons.AutoMirrored.Outlined.Backspace, style = KeyStyle.ACTION, descriptionRes = R.string.key_backspace, key = Key.Backspace)),
+        listOf(digit('4'), digit('5'), digit('6'), ConverterKeySpec(label = "C", style = KeyStyle.ACTION, key = Key.Clear)),
+        listOf(digit('1'), digit('2'), digit('3'), ConverterKeySpec(icon = Icons.Outlined.SwapVert, style = KeyStyle.OPERATOR, descriptionRes = R.string.swap_units, swap = true)),
+        listOf(
+            ConverterKeySpec(label = "±", style = KeyStyle.NUMBER, descriptionRes = R.string.key_toggle_sign, key = Key.ToggleSign),
+            digit('0'),
+            ConverterKeySpec(label = decimalSeparator.toString(), style = KeyStyle.NUMBER, descriptionRes = R.string.key_decimal, key = Key.Decimal),
+            null,
+        ),
+    )
+    val gap = if (compact) 6.dp else 10.dp
+    val view = LocalView.current
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
+        rows.forEach { row ->
+            Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                row.forEach { spec ->
+                    if (spec == null) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    } else {
+                        KeyButton(
+                            label = spec.label,
+                            icon = spec.icon,
+                            style = spec.style,
+                            compact = compact,
+                            contentDescription = spec.descriptionRes?.let { stringResource(it) },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            onClick = {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                if (spec.swap) onSwap() else spec.key?.let(onKey)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
