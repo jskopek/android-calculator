@@ -40,6 +40,19 @@ class NumberFormatter(locale: Locale = Locale.getDefault()) {
     }
 
     /**
+     * Money formatting: two decimals for amounts of one or more, otherwise four significant digits
+     * so small unit values (1 JPY in USD) stay meaningful.
+     */
+    fun formatCurrency(value: BigDecimal): String {
+        if (value.signum() == 0) return "0"
+        return if (value.abs() >= BigDecimal.ONE) {
+            formatInput(value.setScale(2, RoundingMode.HALF_UP).toPlainString())
+        } else {
+            formatResult(value.round(MathContext(4, RoundingMode.HALF_UP)))
+        }
+    }
+
+    /**
      * Formats number text exactly as typed, only adding grouping separators to the integer part and
      * swapping in the locale's decimal separator. "1234.50" -> "1,234.50", "-" -> "-", "0." -> "0.".
      */

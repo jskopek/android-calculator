@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +28,9 @@ import androidx.compose.material.icons.automirrored.outlined.Backspace
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalIconButton
@@ -34,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
@@ -41,6 +48,7 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -57,10 +66,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ca.skopek.calculator.ConverterField
 import ca.skopek.calculator.ConverterUiState
 import ca.skopek.calculator.ConverterViewModel
+import ca.skopek.calculator.CurrencyStatus
 import ca.skopek.calculator.R
 import ca.skopek.calculator.UnitValue
 import ca.skopek.calculator.engine.Key
 import ca.skopek.calculator.engine.units.ConversionUnit
+import ca.skopek.calculator.engine.units.CurrencyInfo
 import ca.skopek.calculator.engine.units.UnitCategory
 
 /**
@@ -76,6 +87,7 @@ fun ConverterScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     BackHandler(onBack = onBack)
+    LaunchedEffect(Unit) { viewModel.onShown() }
 
     val twoPane = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
     val compactHeight = windowSizeClass.heightSizeClass == WindowHeightSizeClass.Compact
@@ -158,6 +170,19 @@ private fun ConverterPane(
     viewModel: ConverterViewModel,
     modifier: Modifier = Modifier,
 ) {
+    var showCurrencyDialog by remember { mutableStateOf(false) }
+    val currency = state.currency
+    val onEditCurrencies: (() -> Unit)? = if (currency != null) ({ showCurrencyDialog = true }) else null
+
+    if (showCurrencyDialog && currency != null) {
+        CurrencyPickerDialog(
+            available = currency.available,
+            selected = currency.favorites,
+            onToggle = viewModel::toggleFavorite,
+            onDismiss = { showCurrencyDialog = false },
+        )
+    }
+
     Column(modifier = modifier) {
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
@@ -171,6 +196,7 @@ private fun ConverterPane(
                 active = state.activeField == ConverterField.FROM,
                 onActivate = { viewModel.activateField(ConverterField.FROM) },
                 onUnitSelected = { viewModel.selectUnit(ConverterField.FROM, it.id) },
+                onEditUnits = onEditCurrencies,
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 FilledTonalIconButton(onClick = viewModel::swapUnits) {
@@ -185,7 +211,11 @@ private fun ConverterPane(
                 active = state.activeField == ConverterField.TO,
                 onActivate = { viewModel.activateField(ConverterField.TO) },
                 onUnitSelected = { viewModel.selectUnit(ConverterField.TO, it.id) },
+                onEditUnits = onEditCurrencies,
             )
+            if (currency != null) {
+                CurrencyStatusRow(status = currency, onEdit = { showCurrencyDialog = true })
+            }
         }
         ConverterKeypad(
             decimalSeparator = decimalSeparator,
@@ -208,6 +238,7 @@ private fun UnitField(
     active: Boolean,
     onActivate: () -> Unit,
     onUnitSelected: (ConversionUnit) -> Unit,
+    onEditUnits: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     Column(
@@ -225,7 +256,7 @@ private fun UnitField(
                 color = colors.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            UnitPicker(unit = unit, units = units, onSelect = onUnitSelected)
+            UnitPicker(unit = unit, units = units, onSelect = onUnitSelected, onEdit = onEditUnits)
         }
         Row(verticalAlignment = Alignment.Bottom) {
             ScrollingText(
@@ -249,6 +280,7 @@ private fun UnitPicker(
     unit: ConversionUnit,
     units: List<ConversionUnit>,
     onSelect: (ConversionUnit) -> Unit,
+    onEdit: (() -> Unit)? = null,
 ) {
     Box {
         var open by remember { mutableStateOf(false) }
@@ -269,8 +301,96 @@ private fun UnitPicker(
                     },
                 )
             }
+            if (onEdit != null) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.currency_choose) + "…") },
+                    onClick = {
+                        open = false
+                        onEdit()
+                    },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun CurrencyStatusRow(status: CurrencyStatus, onEdit: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (status.updating) {
+            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = status.note,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (status.providerUrl != null) Modifier.clickable { uriHandler.openUri(status.providerUrl) } else Modifier,
+                ),
+        )
+        TextButton(onClick = onEdit) { Text(stringResource(R.string.currency_choose)) }
+    }
+}
+
+/** Checklist of every currency the rate provider offers; ticked ones appear in the pickers. */
+@Composable
+private fun CurrencyPickerDialog(
+    available: List<CurrencyInfo>,
+    selected: List<String>,
+    onToggle: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(available, query) {
+        val q = query.trim()
+        if (q.isEmpty()) available
+        else available.filter { it.code.contains(q, ignoreCase = true) || it.name.contains(q, ignoreCase = true) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.currency_choose)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.currency_search)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 8.dp)) {
+                    items(filtered, key = { it.code }) { info ->
+                        val checked = info.code in selected
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggle(info.code) }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = checked, onCheckedChange = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = info.displayName, modifier = Modifier.weight(1f))
+                            Text(
+                                text = info.code,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } },
+    )
 }
 
 @Composable

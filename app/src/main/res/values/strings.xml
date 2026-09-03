@@ -29,4 +29,11 @@
     <string name="converter_to">To</string>
     <string name="swap_units">Swap units</string>
     <string name="converter_equals">%1$s equals</string>
+    <string name="currency_choose">Choose currencies</string>
+    <string name="currency_search">Search</string>
+    <string name="currency_updating">Updating rates…</string>
+    <string name="currency_rates_by">Rates by %1$s · updated %2$s</string>
+    <string name="currency_update_failed">Couldn\'t update rates: %1$s</string>
+    <string name="currency_no_rates">No exchange rates yet. Connect to the internet to fetch them.</string>
+    <string name="done">Done</string>
 </resources>

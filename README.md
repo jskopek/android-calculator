@@ -12,6 +12,9 @@ A simple, no-nonsense Android calculator built with Kotlin and Jetpack Compose.
 - **Light / dark / system theme**, with Material You dynamic colours on Android 12+.
 - **Unit converter** (length, area, temperature, volume, mass, data, speed, time) with a
   tap-to-edit from/to pair and, on wide screens, the value in every unit of the category.
+- **Currency conversion** with daily rates from ExchangeRate-API (Frankfurter/ECB as fallback),
+  cached on device and refreshed the first time you open it each day. Pick which currencies
+  appear in the picker.
 - **Folding-phone friendly**: on the cover screen (or any narrow window) history lives in a
   bottom sheet; unfold and the tape sits beside the keypad. The keypad scales to whatever
   space it has, and state is kept across fold/unfold and rotation.
@@ -65,7 +68,6 @@ app/src/main/java/ca/skopek/calculator/
 
 ## Ideas for later
 
-- Currency conversion with live rates (a category built at runtime from fetched rates)
 - Scientific mode
 - Tabletop / half-folded posture layout using Jetpack WindowManager
 - Hardware keyboard input
